@@ -1,0 +1,8 @@
+streamlit
+SpeechRecognition
+edge-tts
+fpdf2
+Pillow
+requests
+streamlit-mic-recorder
+pydub
