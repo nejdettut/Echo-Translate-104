@@ -77,12 +77,21 @@ def translate_text(text, source_lang_code, target_lang_code):
 def create_pdf(original_text, translated_text, source_lang, target_lang):
     pdf = FPDF()
     pdf.add_page()
-    font_path = r"C:\Windows\Fonts\arial.ttf"
+    
+    # Unicode destekli font yolu (Yerel vs Sunucu çekişmesi için assets klasörü)
+    # Streamlit Cloud'da assets/arial.ttf kullanılacak
+    font_path = "assets/arial.ttf"
+    if not os.path.exists(font_path):
+        # Fallback to absolute windows path for local testing if assets not yet synced
+        font_path = r"C:\Windows\Fonts\arial.ttf"
+
     if os.path.exists(font_path):
         pdf.add_font("ArialUni", "", font_path)
         pdf.set_font("ArialUni", size=14)
     else:
-        pdf.set_font("Helvetica", size=14)
+        # Son çare olarak latin-1 destekli fonta dön (Hata vermemesi için)
+        pdf.set_font("Helvetica", size=12)
+
     pdf.cell(200, 10, txt="Echo-Translate AI - Transkript", ln=True, align='C')
     pdf.ln(10)
     pdf.multi_cell(0, 10, txt=f"Kaynak Dil ({source_lang}): {original_text}")
@@ -99,28 +108,21 @@ def create_zip(mp3_content, pdf_content):
 
 def process_audio(audio_bytes):
     r = sr.Recognizer()
-    
-    # Yeni: Tarayıcıdan gelen webm/ogg formatını WAV formatına dönüştürme
     try:
         audio_stream = io.BytesIO(audio_bytes)
         audio_segment = AudioSegment.from_file(audio_stream)
-        
-        # WAV formatına dönüştür
         wav_io = io.BytesIO()
         audio_segment.export(wav_io, format="wav")
         wav_io.seek(0)
         
         with sr.AudioFile(wav_io) as source:
             audio_data = r.record(source)
-            # Sesi Metne Çevir
             text = r.recognize_google(audio_data, language=source_lang_info["code"])
             st.success(f"🎙️ Söylenen: {text}")
 
-            # Tercüme Et
             translated_result = translate_text(text, source_lang_info["code"], target_lang_info["code"])
             st.write(f"🌐 Çeviri ({target_lang_name}): {translated_result}")
 
-            # Ses Sentezleme
             gender = "Female" if "Kadın" in selected_voice_name else "Male"
             voices = asyncio.run(get_edge_voices(target_lang_info["voice"], gender))
             voice_index = (VOICE_NAMES.index(selected_voice_name) // 2) % len(voices)
@@ -130,7 +132,6 @@ def process_audio(audio_bytes):
             asyncio.run(synthesize_audio(translated_result, voice_id, output_file))
             st.audio(output_file, format="audio/mp3")
 
-            # Kaydet
             pdf_bytes = create_pdf(text, translated_result, source_lang_name, target_lang_name)
             with open(output_file, "rb") as f:
                 mp3_bytes = f.read()
@@ -140,7 +141,7 @@ def process_audio(audio_bytes):
     except Exception as e:
         st.error(f"⚠️ Bir hata oluştu: {e}")
 
-# Ana Bölüm - Mikrofon Kaydı
+# Ana Bölüm
 st.subheader("🎙️ Kayda Başlayın")
 audio_record = mic_recorder(
     start_prompt="🔴 Kaydı Başlat",
@@ -152,7 +153,6 @@ audio_record = mic_recorder(
 if audio_record:
     process_audio(audio_record['bytes'])
 
-# İndirme Butonu
 if 'ready' in st.session_state and st.session_state['ready']:
     st.divider()
     st.download_button(
@@ -163,7 +163,6 @@ if 'ready' in st.session_state and st.session_state['ready']:
         use_container_width=True
     )
 
-# Footer
 st.sidebar.markdown("---")
 st.sidebar.info("Powered by Google Translate & Microsoft Edge TTS")
 st.markdown("<br><br><br><br><hr><div style='text-align: center; color: gray;'>Designed by © 2026 Nejdet Tut</div>", unsafe_allow_html=True)
