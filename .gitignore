@@ -1,0 +1,7 @@
+output.mp3
+echo_translate_paket.zip
+cevirisi_transkript.pdf
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.streamlit/
