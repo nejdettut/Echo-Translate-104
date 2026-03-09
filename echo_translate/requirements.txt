@@ -4,4 +4,4 @@ edge-tts
 fpdf2
 Pillow
 requests
-pyaudio
+streamlit-mic-recorder
