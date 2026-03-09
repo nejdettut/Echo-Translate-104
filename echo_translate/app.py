@@ -8,6 +8,7 @@ import io
 import zipfile
 import requests
 from streamlit_mic_recorder import mic_recorder
+from pydub import AudioSegment
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="Echo-Translate AI Pro", page_icon="🎤", layout="wide")
@@ -98,10 +99,19 @@ def create_zip(mp3_content, pdf_content):
 
 def process_audio(audio_bytes):
     r = sr.Recognizer()
-    audio_file = io.BytesIO(audio_bytes)
-    with sr.AudioFile(audio_file) as source:
-        audio_data = r.record(source)
-        try:
+    
+    # Yeni: Tarayıcıdan gelen webm/ogg formatını WAV formatına dönüştürme
+    try:
+        audio_stream = io.BytesIO(audio_bytes)
+        audio_segment = AudioSegment.from_file(audio_stream)
+        
+        # WAV formatına dönüştür
+        wav_io = io.BytesIO()
+        audio_segment.export(wav_io, format="wav")
+        wav_io.seek(0)
+        
+        with sr.AudioFile(wav_io) as source:
+            audio_data = r.record(source)
             # Sesi Metne Çevir
             text = r.recognize_google(audio_data, language=source_lang_info["code"])
             st.success(f"🎙️ Söylenen: {text}")
@@ -127,8 +137,8 @@ def process_audio(audio_bytes):
             
             st.session_state['zip_data'] = create_zip(mp3_bytes, pdf_bytes)
             st.session_state['ready'] = True
-        except Exception as e:
-            st.error(f"⚠️ Bir hata oluştu: {e}")
+    except Exception as e:
+        st.error(f"⚠️ Bir hata oluştu: {e}")
 
 # Ana Bölüm - Mikrofon Kaydı
 st.subheader("🎙️ Kayda Başlayın")
