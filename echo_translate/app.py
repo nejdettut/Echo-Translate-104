@@ -1,12 +1,12 @@
 import streamlit as st
 import asyncio
 import edge_tts
-from googletrans import Translator
 import speech_recognition as sr
 from fpdf import FPDF
 import os
 import io
 import zipfile
+import requests
 
 # Sayfa Yapılandırması
 st.set_page_config(page_title="Echo-Translate AI Pro", page_icon="🎤", layout="wide")
@@ -63,9 +63,21 @@ async def synthesize_audio(text, voice_id, output_path):
     communicate = edge_tts.Communicate(text, voice_id)
     await communicate.save(output_path)
 
-translator = Translator()
+# Alternatif Google Translate Fonksiyonu (googletrans yerine requests kullanarak)
+def translate_text(text, source_lang_code, target_lang_code):
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl={source_lang_code}&tl={target_lang_code}&dt=t&q={text}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            result = response.json()
+            translated_text = "".join([part[0] for part in result[0]])
+            return translated_text
+        else:
+            return f"Çeviri Hatası (Status: {response.status_code})"
+    except Exception as e:
+        return f"Hata: {str(e)}"
 
-# PDF Oluşturma (Fix: return bytes)
+# PDF Oluşturma (return bytes)
 def create_pdf(original_text, translated_text, source_lang, target_lang):
     pdf = FPDF()
     pdf.add_page()
@@ -103,9 +115,9 @@ def translate_audio():
             text = r.recognize_google(audio, language=source_lang_info["code"])
             st.success(f"🎙️ Söylenen: {text}")
 
-            # Tercüme Et (Hedef dile göre)
-            translated = translator.translate(text, src=source_lang_info["code"], dest=target_lang_info["code"])
-            st.write(f"🌐 Çeviri ({target_lang_name}): {translated.text}")
+            # Tercüme Et (YENİ: requests tabanlı metod)
+            translated_result = translate_text(text, source_lang_info["code"], target_lang_info["code"])
+            st.write(f"🌐 Çeviri ({target_lang_name}): {translated_result}")
 
             # Ses Sentezleme
             gender = "Female" if "Kadın" in selected_voice_name else "Male"
@@ -115,12 +127,12 @@ def translate_audio():
             voice_id = voices[voice_index]['Name']
             
             output_file = "output.mp3"
-            asyncio.run(synthesize_audio(translated.text, voice_id, output_file))
+            asyncio.run(synthesize_audio(translated_result, voice_id, output_file))
             
             st.audio(output_file, format="audio/mp3")
 
             # PDF Oluştur
-            pdf_bytes = create_pdf(text, translated.text, source_lang_name, target_lang_name)
+            pdf_bytes = create_pdf(text, translated_result, source_lang_name, target_lang_name)
             
             # MP3 Oku
             with open(output_file, "rb") as f:
@@ -130,14 +142,14 @@ def translate_audio():
             zip_data = create_zip(mp3_bytes, pdf_bytes)
 
             st.session_state['original'] = text
-            st.session_state['translated'] = translated.text
+            st.session_state['translated'] = translated_result
             st.session_state['zip_data'] = zip_data
             st.session_state['ready'] = True
 
         except Exception as e:
             st.error(f"⚠️ Bir hata oluştu: {e}")
 
-# Ana Botunlar
+# Ana Butonlar
 col1, col2 = st.columns(2)
 with col1:
     if st.button("🎤 Çeviriye Başla", use_container_width=True):
@@ -147,7 +159,7 @@ with col1:
 if 'ready' in st.session_state and st.session_state['ready']:
     st.divider()
     st.download_button(
-        label="� Tüm Çıktıları İndir (MP3 + PDF)",
+        label="📥 Tüm Çıktıları İndir (MP3 + PDF)",
         data=st.session_state['zip_data'],
         file_name="echo_translate_paket.zip",
         mime="application/zip",
